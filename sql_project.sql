@@ -51,7 +51,8 @@ facilities in question. */
 
 SELECT facid, name, membercost, monthlymaintenance
 FROM Facilities
-WHERE membercost < (0.2*monthlymaintenance)
+WHERE membercost>0
+AND membercost < (0.2*monthlymaintenance)
 
 
 facid	name	           membercost	  monthlymaintenance
@@ -102,12 +103,12 @@ Pool Table      15                      cheap
 /* Q6: You'd like to get the first and last name of the last member(s)
 who signed up. Do not use the LIMIT clause for your solution. */
 
-SELECT firstname, surname
-FROM Bookings
-JOIN Members
-ON Bookings.memid = Members.memid
-WHERE starttime = (SELECT MAX(starttime) FROM Bookings) AND
-      Bookings.memid != '0'
+SELECT firstname,
+       surname,
+       joindate
+  FROM `Members`
+ WHERE joindate = (SELECT MAX(joindate) FROM `Members`)
+
 
 firstname	surname
 Henry           Worthington-Smyth
@@ -199,18 +200,19 @@ the guest user's ID is always 0. Include in your output the name of the
 facility, the name of the member formatted as a single column, and the cost.
 Order by descending cost, and do not use any subqueries. */
 
-SELECT name,
-       CONCAT(firstname,' ',surname) AS member_name,
-       CASE WHEN Bookings.memid = 0 THEN guestcost * slots
-            ELSE membercost * slots END AS cost 
-FROM Bookings
-JOIN Facilities
-ON Bookings.facid = Facilities.facid
-JOIN Members
-ON Bookings.memid = Members.memid
-WHERE starttime LIKE '%2012-09-14%'AND
-      ((guestcost * slots > 30 AND Bookings.memid = 0) OR (membercost * slots > 30 AND Bookings.memid != 0))
-ORDER BY cost DESC
+SELECT fac.name,
+       CONCAT(mem.firstname, ' ', mem.surname) AS "Name",
+       CASE WHEN mem.memid = 0 THEN book.slots * fac.guestcost
+            ELSE book.slots * fac.membercost END AS "Cost"
+  FROM `Members` mem
+  JOIN `Bookings` book
+    ON mem.memid = book.memid
+  JOIN `Facilities` fac
+    ON book.facid = fac.facid
+ WHERE 30 < CASE WHEN mem.memid = 0 THEN book.slots * fac.guestcost
+                 ELSE book.slots * fac.membercost END
+   AND book.starttime LIKE '2012-09-14%'
+ORDER BY Cost DESC
 
 name	        member_name	cost
 Massage Room 2	GUEST GUEST	320
@@ -230,27 +232,24 @@ Squash Court	GUEST GUEST	35
 
 /* Q9: This time, produce the same result as in Q8, but using a subquery. */
 
-SELECT name,
-       CONCAT(firstname,' ',surname) AS member_name,
-       CASE WHEN memid = 0 THEN guestcost * slots
-            ELSE membercost * slots END AS cost 
-FROM (SELECT Bookings.memid AS memid,
-             Bookings.facid,
-             firstname,
-             surname,
-             slots,
-             membercost,
-             guestcost,
-             starttime,
-             name
-     FROM Bookings
-     JOIN Facilities
-     ON Bookings.facid = Facilities.facid
-     JOIN Members
-     ON Bookings.memid = Members.memid) AS T
-WHERE starttime LIKE '%2012-09-14%'AND
-      ((guestcost * slots > 30 AND memid = 0) OR (membercost * slots > 30 AND memid != 0))
-ORDER BY cost DESC
+SELECT combined.facility_name,
+       combined.member_name,
+       combined.booking_cost
+  FROM (SELECT b.starttime,
+               CONCAT(m.firstname, ' ', m.surname) AS member_name,
+               f.name AS facility_name,
+               CASE WHEN m.memid = 0
+                    THEN f.guestcost
+                    ELSE f.membercost END AS booking_cost
+          FROM `Bookings` b
+          JOIN `Facilities` f
+            ON f.facid = b.facid
+          JOIN `Members` m
+            ON m.memid = b.memid) combined
+ WHERE combined.starttime LIKE '2012-09-14%'
+   AND combined.booking_cost > 30
+ ORDER BY 3 DESC
+ 
 
 name	        member_name	cost
 Massage Room 2	GUEST GUEST	320
